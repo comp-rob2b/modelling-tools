@@ -1,0 +1,72 @@
+{{- "kdl.cpp" | file -}}
+
+#include <iostream>
+#include <frames.hpp>
+#include <frames_io.hpp>
+#include <chain.hpp>
+
+int main(int argc, char **argv) {
+{% for chain in g.subjects(RDF["type"], KC_ENT["KinematicChain"]) %}
+  {% for joint in g.objects(chain, KC_ENT["joints"]) %}
+    KDL::Joint {{iri_to_identifier(joint) -}}
+    {% if KC_ENT["RevoluteJoint"] in g[joint : RDF["type"]] %}
+      {%- if list(g[joint : KC_ENT["common-axis"] / GEOM_REL["lines"] / inv_path(GEOM_ENT["vector-x"])]) | length == 2 -%}
+    (KDL::Joint::RotX)
+      {%- elif list(g[joint : KC_ENT["common-axis"] / GEOM_REL["lines"] / inv_path(GEOM_ENT["vector-y"])]) | length == 2 -%}
+    (KDL::Joint::RotY)
+      {%- elif list(g[joint : KC_ENT["common-axis"] / GEOM_REL["lines"] / inv_path(GEOM_ENT["vector-z"])]) | length == 2 -%}
+    (KDL::Joint::RotZ)
+      {%- endif -%}
+    {%- endif -%};
+  {% endfor %}
+{% endfor %}
+
+{% for pose in g.subjects(RDF["type"], GEOM_REL["Pose"]) %}
+  {% set pose_id = iri_to_identifier(pose) %}
+  {% if GEOM_CRD["PoseCoordinate"] in g[pose : inv_path(GEOM_CRD["of-pose"]) / RDF["type"]] %}
+    {% set coord = g[pose : inv_path(GEOM_CRD["of-pose"])].__next__() %}
+    KDL::Vector {{pose_id}}_vector({{g[coord : GEOM_CRD["x"]].__next__()}}, {{g[coord : GEOM_CRD["y"]].__next__()}}, {{g[coord : GEOM_CRD["z"]].__next__()}});
+    {% set col_x = list(rdflib.collection.Collection(g, g[coord : GEOM_CRD["direction-cosine-x"]].__next__())) %}
+    {% set col_y = list(rdflib.collection.Collection(g, g[coord : GEOM_CRD["direction-cosine-y"]].__next__())) %}
+    {% set col_z = list(rdflib.collection.Collection(g, g[coord : GEOM_CRD["direction-cosine-z"]].__next__())) %}
+    KDL::Rotation {{pose_id}}_rotation(
+            {{col_x[0]}}, {{col_y[0]}}, {{col_z[0]}},
+            {{col_x[1]}}, {{col_y[1]}}, {{col_z[1]}},
+            {{col_x[2]}}, {{col_y[2]}}, {{col_z[2]}});
+    KDL::Frame {{pose_id}}({{pose_id}}_rotation, {{pose_id}}_vector);
+  {% else %}
+    KDL::Frame {{pose_id}};
+  {% endif %}
+{% endfor %}
+
+{% for q in g.subjects(RDF["type"], KC_STAT["RevoluteJointPosition"]) %}
+    double {{iri_to_identifier(q)}}
+    {%- if KC_STAT["RevoluteJointPositionCoordinate"] in g[q : RDF["type"]] %} = {{g[q : QUDT["value"]].__next__()}}
+    {%- endif %};
+{% endfor %}
+
+{% for schedule in g.subjects(RDF["type"], ALGO["Schedule"]) %}
+    // {{iri_to_identifier(schedule)}}
+  {% for trigger in rdflib.collection.Collection(g, g[schedule : ALGO["trigger-chain"]].__next__())%}
+    // {{iri_to_identifier(trigger)}}
+    {% if GEOM_OP["ComposePose"] in g[trigger : RDF["type"]] %}
+      {% set out = iri_to_identifier(g[trigger : GEOM_OP["pose-out"]].__next__()) %}
+      {% set in1 = iri_to_identifier(g[trigger : GEOM_OP["pose1"]].__next__()) %}
+      {% set in2 = iri_to_identifier(g[trigger : GEOM_OP["pose2"]].__next__()) %}
+    {{out}} = {{in1}} * {{in2}};
+    {% elif KC_OP["ForwardPositionKinematics"] in g[trigger : RDF["type"]] %}
+      {% set joint = iri_to_identifier(g[trigger : KC_OP["joint"]].__next__()) %}
+      {% set q = iri_to_identifier(g[trigger : KC_OP["joint-space-motion"]].__next__()) %}
+      {% set x = iri_to_identifier(g[trigger : KC_OP["cartesian-space-motion"]].__next__()) %}
+    {{x}} = {{joint}}.pose({{q}});
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+
+{% for pose in g.subjects(RDF["type"], GEOM_REL["Pose"]) %}
+    std::cout << "{{iri_to_identifier(pose)}}: " << std::endl
+              << {{iri_to_identifier(pose)}} << std::endl;
+{% endfor %}
+
+    return 0;
+}
