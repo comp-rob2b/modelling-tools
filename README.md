@@ -84,6 +84,14 @@ kinematics as shown similar to the following output:
 For each of the three poses the first 3x3 values represent the orientation
 matrix while the last three values represent the position vector.
 
+## Publication
+
+If you use our work please cite the following paper:
+
+> Domain-specific languages for kinematic chains and their solver algorithms: lessons learned for composable models
+> Sven Schneider and Nico Hochgeschwender and Herman Bruyninckx
+> International Conference on Robotics and Automation (ICRA). 2023.  
+
 ## Acknowledgement
 This work is part of a project that has received funding from the European
 Union's Horizon 2020 research and innovation programme SESAME under grant
